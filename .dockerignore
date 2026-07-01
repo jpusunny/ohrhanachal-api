@@ -1,0 +1,5 @@
+node_modules
+.medusa
+.env
+.git
+*.log
