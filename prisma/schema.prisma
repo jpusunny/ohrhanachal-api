@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProductStatus {
+  draft
+  active
+}
+
+enum StockReason {
+  initial
+  manual_adjustment
+  order
+  return
+  correction
+}
+
+enum AdminRole {
+  admin
+  staff
+}
+
+model Product {
+  id              String        @id @default(cuid())
+  title           String
+  titleHe         String?
+  author          String?
+  series          String?
+  descriptionHtml String?
+  status          ProductStatus @default(draft)
+  voiceCode       String?       @unique
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  variants Variant[]
+  images   ProductImage[]
+
+  @@index([status])
+}
+
+model Variant {
+  id              String   @id @default(cuid())
+  productId       String
+  name            String
+  sku             String   @unique
+  barcode         String?
+  priceCents      Int
+  compareAtCents  Int?
+  weightGrams     Int?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  inventory InventoryLevel?
+  movements StockMovement[]
+
+  @@index([productId])
+}
+
+model ProductImage {
+  id       String  @id @default(cuid())
+  productId String
+  url      String
+  altText  String?
+  position Int     @default(0)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, position])
+}
+
+model InventoryLevel {
+  variantId     String @id
+  onHand        Int    @default(0)
+  reserved      Int    @default(0)
+  reorderPoint  Int?
+  updatedAt     DateTime @updatedAt
+
+  variant Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+}
+
+model StockMovement {
+  id        String      @id @default(cuid())
+  variantId String
+  delta     Int
+  reason    StockReason
+  note      String?
+  actor     String
+  createdAt DateTime    @default(now())
+
+  variant Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([variantId, createdAt])
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         AdminRole @default(admin)
+  createdAt    DateTime  @default(now())
+}
