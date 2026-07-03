@@ -13,8 +13,11 @@ export async function OPTIONS(req: Request) {
 export async function GET(req: Request) {
   try {
     const { ok: wholesale } = await isWholesaleContext();
+    const url = new URL(req.url);
+    const pressOnly = url.searchParams.get("press") === "1";
+
     const products = await prisma.product.findMany({
-      where: { status: "active" },
+      where: { status: "active", ...(pressOnly ? { currentlyPrinting: true } : {}) },
       orderBy: { title: "asc" },
       include: {
         variants: {
@@ -47,6 +50,7 @@ export async function GET(req: Request) {
         compareAtCentsMax: compareAts.length ? Math.max(...compareAts) : null,
         image: p.images[0] || null,
         variantCount: p.variants.length,
+        currentlyPrinting: p.currentlyPrinting,
         wholesale,
       };
     });

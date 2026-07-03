@@ -82,6 +82,7 @@ model Product {
   descriptionHtml String?
   status          ProductStatus @default(draft)
   voiceCode       String?       @unique
+  currentlyPrinting Boolean     @default(false)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 

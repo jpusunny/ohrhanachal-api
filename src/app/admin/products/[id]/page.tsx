@@ -27,6 +27,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
     descriptionHtml: product.descriptionHtml ?? "",
     status: product.status,
     voiceCode: product.voiceCode ?? "",
+    currentlyPrinting: product.currentlyPrinting,
     variants: product.variants.map((v) => ({
       id: v.id,
       name: v.name,

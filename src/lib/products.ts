@@ -32,6 +32,7 @@ export const productCreateSchema = z.object({
   descriptionHtml: z.string().nullish(),
   status: z.enum(["draft", "active"]).optional().default("draft"),
   voiceCode: z.string().nullish(),
+  currentlyPrinting: z.boolean().optional().default(false),
   variants: z.array(variantInput).default([]),
   images: z.array(imageInput).default([]),
 });

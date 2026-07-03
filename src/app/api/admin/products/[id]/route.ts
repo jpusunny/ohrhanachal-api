@@ -53,6 +53,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
             input.descriptionHtml === undefined ? existing.descriptionHtml : input.descriptionHtml,
           status: input.status ?? existing.status,
           voiceCode: input.voiceCode === undefined ? existing.voiceCode : input.voiceCode || null,
+          currentlyPrinting: input.currentlyPrinting ?? existing.currentlyPrinting,
         },
       });
 

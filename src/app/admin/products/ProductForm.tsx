@@ -50,6 +50,7 @@ export type ProductFormInitial = {
   descriptionHtml: string;
   status: "draft" | "active";
   voiceCode: string;
+  currentlyPrinting: boolean;
   variants: VariantState[];
   images: ImageState[];
 };
@@ -65,6 +66,7 @@ export const emptyInitial: ProductFormInitial = {
   descriptionHtml: "",
   status: "draft",
   voiceCode: "",
+  currentlyPrinting: false,
   variants: [],
   images: [],
 };
@@ -158,6 +160,7 @@ export default function ProductForm({ initial }: { initial: ProductFormInitial }
       descriptionHtml: state.descriptionHtml.trim() || null,
       status: state.status,
       voiceCode: state.voiceCode.trim() || null,
+      currentlyPrinting: state.currentlyPrinting,
       variants: state.variants.map((v) => ({
         id: v.id,
         name: v.name.trim(),
@@ -278,6 +281,16 @@ export default function ProductForm({ initial }: { initial: ProductFormInitial }
               className="w-full rounded border border-gray-300 px-3 py-2"
               placeholder="e.g. 1042"
             />
+          </Field>
+          <Field label="Currently in our press">
+            <label className="mt-2 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={state.currentlyPrinting}
+                onChange={(e) => setField("currentlyPrinting", e.target.checked)}
+              />
+              <span>Show under &ldquo;In our press this month&rdquo; on the homepage.</span>
+            </label>
           </Field>
           <Field label="URL handle (slug)">
             <input

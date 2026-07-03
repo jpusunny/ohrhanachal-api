@@ -47,6 +47,7 @@ export async function POST(req: Request) {
           descriptionHtml: input.descriptionHtml ?? null,
           status: input.status,
           voiceCode: input.voiceCode || null,
+          currentlyPrinting: input.currentlyPrinting ?? false,
           images: {
             create: input.images.map((img, idx) => ({
               url: img.url,
