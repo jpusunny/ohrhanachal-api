@@ -46,7 +46,10 @@ export async function setSessionCookie(token: string): Promise<void> {
   store.set(COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    // The site is served over HTTP behind traefik (sslip.io, no cert). Secure
+    // cookies would be silently dropped by the browser. Opt in only when we
+    // move to HTTPS by setting COOKIE_SECURE=true.
+    secure: process.env.COOKIE_SECURE === "true",
     path: "/",
     maxAge: TTL_SECONDS,
   });
