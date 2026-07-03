@@ -12,6 +12,14 @@ enum ProductStatus {
   active
 }
 
+enum AuthorGroup {
+  nachman
+  nossen
+  anash
+  set
+  other
+}
+
 enum StockReason {
   initial
   manual_adjustment
@@ -32,6 +40,8 @@ model Product {
   titleHe         String?
   author          String?
   series          String?
+  authorGroup     AuthorGroup   @default(other)
+  seforGroup      String?
   descriptionHtml String?
   status          ProductStatus @default(draft)
   voiceCode       String?       @unique
@@ -42,6 +52,8 @@ model Product {
   images   ProductImage[]
 
   @@index([status])
+  @@index([authorGroup])
+  @@index([seforGroup])
 }
 
 model Variant {

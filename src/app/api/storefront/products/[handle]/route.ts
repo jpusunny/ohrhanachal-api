@@ -40,6 +40,28 @@ export async function GET(req: Request, { params }: { params: Promise<{ handle: 
       };
     });
 
+    // Sibling products in the same seforGroup: "also available in" swatches.
+    const siblings = p.seforGroup
+      ? await prisma.product.findMany({
+          where: {
+            seforGroup: p.seforGroup,
+            status: "active",
+            NOT: { id: p.id },
+          },
+          select: {
+            handle: true,
+            title: true,
+            images: { orderBy: { position: "asc" }, take: 1, select: { url: true } },
+            variants: {
+              where: { active: true },
+              orderBy: { priceCents: "asc" },
+              take: 1,
+              select: { priceCents: true },
+            },
+          },
+        })
+      : [];
+
     return withCors(
       req,
       json({
@@ -50,9 +72,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ handle: 
           titleHe: p.titleHe,
           author: p.author,
           series: p.series,
+          authorGroup: p.authorGroup,
+          seforGroup: p.seforGroup,
           descriptionHtml: p.descriptionHtml,
           variants,
           images: p.images.map((i) => ({ url: i.url, altText: i.altText, position: i.position })),
+          siblings: siblings.map((s) => ({
+            handle: s.handle,
+            title: s.title,
+            image: s.images[0]?.url ?? null,
+            priceCents: s.variants[0]?.priceCents ?? null,
+          })),
         },
       }),
     );

@@ -38,6 +38,8 @@ export async function GET(req: Request) {
         titleHe: p.titleHe,
         author: p.author,
         series: p.series,
+        authorGroup: p.authorGroup,
+        seforGroup: p.seforGroup,
         priceCentsMin: prices.length ? Math.min(...prices) : null,
         priceCentsMax: prices.length ? Math.max(...prices) : null,
         compareAtCentsMax: compareAts.length ? Math.max(...compareAts) : null,
