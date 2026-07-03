@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { json, notFound, parseBody, serverError } from "@/lib/api";
 import { productUpdateSchema } from "@/lib/products";
+import { slugify } from "@/lib/slug";
 
 export const dynamic = "force-dynamic";
 
@@ -32,14 +33,22 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
       const existing = await tx.product.findUnique({ where: { id } });
       if (!existing) return null;
 
+      const nextHandle = input.handle ? (slugify(input.handle) || existing.handle) : existing.handle;
+      const nextSeforGroup =
+        input.seforGroup === undefined
+          ? existing.seforGroup
+          : input.seforGroup ? (slugify(input.seforGroup) || null) : null;
+
       await tx.product.update({
         where: { id },
         data: {
-          handle: input.handle ? input.handle : existing.handle,
+          handle: nextHandle,
           title: input.title ?? existing.title,
           titleHe: input.titleHe === undefined ? existing.titleHe : input.titleHe,
           author: input.author === undefined ? existing.author : input.author,
           series: input.series === undefined ? existing.series : input.series,
+          authorGroup: input.authorGroup ?? existing.authorGroup,
+          seforGroup: nextSeforGroup,
           descriptionHtml:
             input.descriptionHtml === undefined ? existing.descriptionHtml : input.descriptionHtml,
           status: input.status ?? existing.status,
@@ -87,6 +96,13 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
                 active: v.active ?? true,
               },
             });
+            if (v.reorderPoint !== undefined) {
+              await tx.inventoryLevel.upsert({
+                where: { variantId: v.id },
+                create: { variantId: v.id, onHand: 0, reorderPoint: v.reorderPoint ?? null },
+                update: { reorderPoint: v.reorderPoint ?? null },
+              });
+            }
           } else {
             const created = await tx.variant.create({
               data: {
@@ -100,7 +116,13 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
                 active: v.active ?? true,
               },
             });
-            await tx.inventoryLevel.create({ data: { variantId: created.id, onHand: v.initialOnHand ?? 0 } });
+            await tx.inventoryLevel.create({
+              data: {
+                variantId: created.id,
+                onHand: v.initialOnHand ?? 0,
+                reorderPoint: v.reorderPoint ?? null,
+              },
+            });
           }
         }
       }

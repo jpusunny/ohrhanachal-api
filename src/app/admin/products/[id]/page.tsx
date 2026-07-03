@@ -17,10 +17,13 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
 
   const initial: ProductFormInitial = {
     id: product.id,
+    handle: product.handle,
     title: product.title,
     titleHe: product.titleHe ?? "",
     author: product.author ?? "",
     series: product.series ?? "",
+    authorGroup: product.authorGroup,
+    seforGroup: product.seforGroup ?? "",
     descriptionHtml: product.descriptionHtml ?? "",
     status: product.status,
     voiceCode: product.voiceCode ?? "",
@@ -34,6 +37,8 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
       weightGrams: v.weightGrams == null ? "" : String(v.weightGrams),
       active: v.active,
       onHand: v.inventory?.onHand ?? 0,
+      reserved: v.inventory?.reserved ?? 0,
+      reorderPoint: v.inventory?.reorderPoint == null ? "" : String(v.inventory.reorderPoint),
       initialOnHand: "0",
     })),
     images: product.images.map((img) => ({

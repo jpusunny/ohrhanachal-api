@@ -9,6 +9,7 @@ export const variantInput = z.object({
   compareAtCents: z.number().int().nonnegative().nullish(),
   weightGrams: z.number().int().nonnegative().nullish(),
   active: z.boolean().optional().default(true),
+  reorderPoint: z.number().int().nonnegative().nullish(),
   initialOnHand: z.number().int().nonnegative().optional(),
 });
 
@@ -25,6 +26,8 @@ export const productCreateSchema = z.object({
   titleHe: z.string().nullish(),
   author: z.string().nullish(),
   series: z.string().nullish(),
+  authorGroup: z.enum(["nachman", "nossen", "anash", "set", "other"]).optional(),
+  seforGroup: z.string().nullish(),
   descriptionHtml: z.string().nullish(),
   status: z.enum(["draft", "active"]).optional().default("draft"),
   voiceCode: z.string().nullish(),

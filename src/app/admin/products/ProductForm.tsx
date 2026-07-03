@@ -1,9 +1,19 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AdjustStockControl from "./AdjustStockControl";
 import ImageUploader from "./ImageUploader";
+
+export type AuthorGroup = "nachman" | "nossen" | "anash" | "set" | "other";
+
+const AUTHOR_LABEL: Record<AuthorGroup, string> = {
+  nachman: "R' Nachman of Breslev",
+  nossen: "R' Nossen of Breslev",
+  anash: "Sifrei Anash",
+  set: "Complete Set",
+  other: "Other / unassigned",
+};
 
 type VariantState = {
   id?: string;
@@ -15,6 +25,8 @@ type VariantState = {
   weightGrams: string;
   active: boolean;
   onHand: number;
+  reserved: number;
+  reorderPoint: string;
   initialOnHand: string;
 };
 
@@ -27,10 +39,13 @@ type ImageState = {
 
 export type ProductFormInitial = {
   id?: string;
+  handle: string;
   title: string;
   titleHe: string;
   author: string;
   series: string;
+  authorGroup: AuthorGroup;
+  seforGroup: string;
   descriptionHtml: string;
   status: "draft" | "active";
   voiceCode: string;
@@ -39,10 +54,13 @@ export type ProductFormInitial = {
 };
 
 export const emptyInitial: ProductFormInitial = {
+  handle: "",
   title: "",
   titleHe: "",
   author: "",
   series: "",
+  authorGroup: "other",
+  seforGroup: "",
   descriptionHtml: "",
   status: "draft",
   voiceCode: "",
@@ -60,6 +78,8 @@ function newVariant(): VariantState {
     weightGrams: "",
     active: true,
     onHand: 0,
+    reserved: 0,
+    reorderPoint: "",
     initialOnHand: "0",
   };
 }
@@ -80,6 +100,14 @@ export default function ProductForm({ initial }: { initial: ProductFormInitial }
   const [state, setState] = useState<ProductFormInitial>(initial);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [existingGroups, setExistingGroups] = useState<{ slug: string; count: number }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/admin/sefor-groups")
+      .then((r) => (r.ok ? r.json() : { groups: [] }))
+      .then((body) => setExistingGroups(body.groups || []))
+      .catch(() => setExistingGroups([]));
+  }, []);
 
   function setField<K extends keyof ProductFormInitial>(key: K, value: ProductFormInitial[K]) {
     setState((s) => ({ ...s, [key]: value }));
@@ -101,16 +129,30 @@ export default function ProductForm({ initial }: { initial: ProductFormInitial }
     });
   }
 
+  const dragIdx = useRef<number | null>(null);
+  function moveImage(from: number, to: number) {
+    setState((s) => {
+      if (from === to || to < 0 || to >= s.images.length) return s;
+      const images = s.images.slice();
+      const [row] = images.splice(from, 1);
+      images.splice(to, 0, row);
+      return { ...s, images: images.map((img, i) => ({ ...img, position: String(i) })) };
+    });
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setErr(null);
 
     const payload = {
+      handle: state.handle.trim() || null,
       title: state.title.trim(),
       titleHe: state.titleHe.trim() || null,
       author: state.author.trim() || null,
       series: state.series.trim() || null,
+      authorGroup: state.authorGroup,
+      seforGroup: state.seforGroup.trim() || null,
       descriptionHtml: state.descriptionHtml.trim() || null,
       status: state.status,
       voiceCode: state.voiceCode.trim() || null,
@@ -123,6 +165,7 @@ export default function ProductForm({ initial }: { initial: ProductFormInitial }
         compareAtCents: toIntOrNull(v.compareAtCents),
         weightGrams: toIntOrNull(v.weightGrams),
         active: v.active,
+        reorderPoint: toIntOrNull(v.reorderPoint),
         ...(v.id ? {} : { initialOnHand: Math.max(0, toIntOrNull(v.initialOnHand) ?? 0) }),
       })),
       images: state.images.map((img, idx) => ({
@@ -233,6 +276,47 @@ export default function ProductForm({ initial }: { initial: ProductFormInitial }
               placeholder="e.g. 1042"
             />
           </Field>
+          <Field label="URL handle (slug)">
+            <input
+              type="text"
+              value={state.handle}
+              onChange={(e) => setField("handle", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 font-mono text-sm"
+              placeholder={isEdit ? "" : "auto-generated from title"}
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              /product/<span className="font-mono text-gray-700">{state.handle || "auto"}</span>
+            </p>
+          </Field>
+          <Field label="Author group">
+            <select
+              value={state.authorGroup}
+              onChange={(e) => setField("authorGroup", e.target.value as AuthorGroup)}
+              className="w-full rounded border border-gray-300 px-3 py-2"
+            >
+              {(Object.keys(AUTHOR_LABEL) as AuthorGroup[]).map((k) => (
+                <option key={k} value={k}>{AUTHOR_LABEL[k]}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Sefer group (families)">
+            <input
+              type="text"
+              value={state.seforGroup}
+              onChange={(e) => setField("seforGroup", e.target.value)}
+              className="w-full rounded border border-gray-300 px-3 py-2 font-mono text-sm"
+              placeholder="e.g. likutei-moharan"
+              list="sefor-groups"
+            />
+            <datalist id="sefor-groups">
+              {existingGroups.map((g) => (
+                <option key={g.slug} value={g.slug}>{g.slug} ({g.count})</option>
+              ))}
+            </datalist>
+            <p className="mt-1 text-xs text-gray-500">
+              Shares the storefront card with the other formats in this family.
+            </p>
+          </Field>
         </div>
         <Field label="Description (HTML)">
           <textarea
@@ -320,12 +404,32 @@ export default function ProductForm({ initial }: { initial: ProductFormInitial }
                   />
                 </div>
                 <div>
+                  <label className="mb-1 block text-xs text-gray-600">Reorder at</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={v.reorderPoint}
+                    onChange={(e) => updateVariant(idx, { reorderPoint: e.target.value })}
+                    className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                    placeholder="none"
+                  />
+                </div>
+                <div>
                   <label className="mb-1 block text-xs text-gray-600">
-                    {v.id ? "On hand" : "Initial on hand"}
+                    {v.id ? "Stock" : "Initial on hand"}
                   </label>
                   {v.id ? (
-                    <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-sm text-gray-700">
-                      {v.onHand}
+                    <div className="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700 leading-tight">
+                      <div>{v.onHand} on-hand</div>
+                      {v.reserved > 0 && (
+                        <div className="text-gray-500">−{v.reserved} reserved</div>
+                      )}
+                      <div className="font-semibold">
+                        = {Math.max(0, v.onHand - v.reserved)} avail
+                        {v.reorderPoint && Number(v.reorderPoint) > 0 && v.onHand - v.reserved <= Number(v.reorderPoint) && (
+                          <span className="ml-1 text-red-600">· low</span>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <input
@@ -402,8 +506,22 @@ export default function ProductForm({ initial }: { initial: ProductFormInitial }
           {state.images.map((img, idx) => (
             <div
               key={img.id ?? `new-${idx}`}
+              draggable
+              onDragStart={() => { dragIdx.current = idx; }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragIdx.current != null) moveImage(dragIdx.current, idx);
+                dragIdx.current = null;
+              }}
               className="flex items-start gap-2 rounded border border-gray-200 p-2"
             >
+              <div
+                className="flex h-16 w-6 flex-shrink-0 cursor-grab items-center justify-center rounded border border-gray-200 bg-gray-50 text-lg text-gray-400 select-none active:cursor-grabbing"
+                title="Drag to reorder"
+              >
+                ⋮⋮
+              </div>
               {img.url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -421,7 +539,7 @@ export default function ProductForm({ initial }: { initial: ProductFormInitial }
                   value={img.url}
                   onChange={(e) => updateImage(idx, { url: e.target.value })}
                   placeholder="https://…"
-                  className="col-span-7 rounded border border-gray-300 px-2 py-1 text-sm"
+                  className="col-span-8 rounded border border-gray-300 px-2 py-1 text-sm"
                 />
                 <input
                   value={img.altText}
@@ -429,30 +547,26 @@ export default function ProductForm({ initial }: { initial: ProductFormInitial }
                   placeholder="alt text"
                   className="col-span-3 rounded border border-gray-300 px-2 py-1 text-sm"
                 />
-                <input
-                  type="number"
-                  value={img.position}
-                  onChange={(e) => updateImage(idx, { position: e.target.value })}
-                  placeholder="pos"
-                  className="col-span-1 rounded border border-gray-300 px-2 py-1 text-sm"
-                />
                 <button
                   type="button"
                   onClick={() =>
                     setField(
                       "images",
-                      state.images.filter((_, i) => i !== idx),
+                      state.images.filter((_, i) => i !== idx).map((r, i) => ({ ...r, position: String(i) })),
                     )
                   }
                   className="col-span-1 rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
                 >
                   Remove
                 </button>
-                <div className="col-span-12">
+                <div className="col-span-12 flex items-center gap-3 text-xs text-gray-500">
                   <ImageUploader
                     compact
                     onUploaded={(url) => updateImage(idx, { url })}
                   />
+                  <span className="ml-auto">
+                    Position {idx + 1}{idx === 0 && " · primary"}
+                  </span>
                 </div>
               </div>
             </div>

@@ -42,6 +42,8 @@ export async function POST(req: Request) {
           titleHe: input.titleHe ?? null,
           author: input.author ?? null,
           series: input.series ?? null,
+          authorGroup: input.authorGroup ?? "other",
+          seforGroup: input.seforGroup ? slugify(input.seforGroup) || null : null,
           descriptionHtml: input.descriptionHtml ?? null,
           status: input.status,
           voiceCode: input.voiceCode || null,
@@ -70,7 +72,11 @@ export async function POST(req: Request) {
         });
         const initial = v.initialOnHand ?? 0;
         await tx.inventoryLevel.create({
-          data: { variantId: variant.id, onHand: initial },
+          data: {
+            variantId: variant.id,
+            onHand: initial,
+            reorderPoint: v.reorderPoint ?? null,
+          },
         });
         if (initial > 0) {
           await tx.stockMovement.create({
