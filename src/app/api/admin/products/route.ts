@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { json, parseBody, serverError } from "@/lib/api";
 import { productCreateSchema } from "@/lib/products";
 import { getSession } from "@/lib/session";
+import { slugify } from "@/lib/slug";
+import { randomBytes } from "node:crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -29,9 +31,13 @@ export async function POST(req: Request) {
     if (!parsed.ok) return parsed.res;
     const input = { ...parsed.data, variants: parsed.data.variants ?? [], images: parsed.data.images ?? [] };
 
+    const handle = (input.handle && slugify(input.handle)) ||
+      `${slugify(input.title) || "product"}-${randomBytes(3).toString("hex")}`;
+
     const created = await prisma.$transaction(async (tx) => {
       const product = await tx.product.create({
         data: {
+          handle,
           title: input.title,
           titleHe: input.titleHe ?? null,
           author: input.author ?? null,

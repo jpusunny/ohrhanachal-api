@@ -122,6 +122,7 @@ async function main() {
           const created = await prisma.$transaction(async (tx) => {
             const product = await tx.product.create({
               data: {
+                handle,
                 title,
                 descriptionHtml,
                 status,

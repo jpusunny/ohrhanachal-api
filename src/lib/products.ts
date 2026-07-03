@@ -20,6 +20,7 @@ export const imageInput = z.object({
 });
 
 export const productCreateSchema = z.object({
+  handle: z.string().nullish(),
   title: z.string().min(1),
   titleHe: z.string().nullish(),
   author: z.string().nullish(),

@@ -27,6 +27,7 @@ enum AdminRole {
 
 model Product {
   id              String        @id @default(cuid())
+  handle          String        @unique
   title           String
   titleHe         String?
   author          String?

@@ -35,6 +35,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
       await tx.product.update({
         where: { id },
         data: {
+          handle: input.handle ? input.handle : existing.handle,
           title: input.title ?? existing.title,
           titleHe: input.titleHe === undefined ? existing.titleHe : input.titleHe,
           author: input.author === undefined ? existing.author : input.author,
