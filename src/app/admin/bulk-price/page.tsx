@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import BulkPriceForm, { type PriceRow } from "./BulkPriceForm";
 
@@ -26,12 +27,17 @@ export default async function BulkPricePage() {
   }
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">Bulk price update</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Pick the variants you want to touch, choose a change mode, and preview before applying.
-          Prices are stored in cents. Rounding to <code>x.99</code> is common for retail.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Bulk price update</h1>
+          <p className="mt-1 text-sm text-gray-600">
+            Pick the variants you want to touch, choose a change mode, and preview before applying.
+            Prices are stored in cents. Rounding to <code>x.99</code> is common for retail.
+          </p>
+        </div>
+        <Link href="/admin/products" className="whitespace-nowrap text-sm text-gray-600 hover:underline">
+          ← Back to products
+        </Link>
       </div>
       <BulkPriceForm rows={rows} />
     </div>

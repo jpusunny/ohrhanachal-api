@@ -87,6 +87,12 @@ export default async function ProductsListPage({
         <h1 className="text-2xl font-semibold">Products</h1>
         <div className="flex flex-wrap items-center gap-2">
           <Link
+            href="/admin/orders"
+            className="rounded border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
+          >
+            Orders
+          </Link>
+          <Link
             href="/admin/bulk-stock"
             className="rounded border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50"
           >

@@ -13,9 +13,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               Ohr Hanachal
             </Link>
             <nav className="flex gap-4 text-sm text-gray-600">
-              <Link href="/admin/products" className="hover:text-black">
-                Products
-              </Link>
+              <Link href="/admin/products" className="hover:text-black">Products</Link>
+              <Link href="/admin/orders" className="hover:text-black">Orders</Link>
+              <Link href="/admin/settings" className="hover:text-black">Settings</Link>
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm text-gray-600">

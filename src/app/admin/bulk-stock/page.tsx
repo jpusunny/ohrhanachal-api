@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import BulkStockForm, { type BulkVariantRow } from "./BulkStockForm";
 
@@ -35,13 +36,18 @@ export default async function BulkStockPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">Bulk stock adjustment</h1>
-        <p className="mt-1 text-sm text-gray-600">
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Bulk stock adjustment</h1>
+          <p className="mt-1 text-sm text-gray-600">
           Type a positive delta to add stock (e.g. after a print run) or negative to remove.
           Empty rows are ignored. All changes commit as one transaction and share a batch id
           in the audit trail.
-        </p>
+          </p>
+        </div>
+        <Link href="/admin/products" className="whitespace-nowrap text-sm text-gray-600 hover:underline">
+          ← Back to products
+        </Link>
       </div>
       <BulkStockForm rows={rows} />
     </div>
