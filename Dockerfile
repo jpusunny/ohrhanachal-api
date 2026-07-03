@@ -35,4 +35,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 
 USER nextjs
 EXPOSE 3000
+
+# Force IPv4 (Next.js binds 0.0.0.0; "localhost" resolves to ::1 first in Debian).
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=5 \
+  CMD curl -fsS http://127.0.0.1:3000/api/health >/dev/null || exit 1
+
 CMD ["sh", "-c", "node ./node_modules/prisma/build/index.js migrate deploy && node scripts/seed-admin.mjs && node server.js"]
