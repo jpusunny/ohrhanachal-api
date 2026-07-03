@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import OrderActions from "./OrderActions";
+import { trackingUrl } from "@/lib/carriers";
 
 export const dynamic = "force-dynamic";
 
@@ -153,8 +154,28 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             <p>{order.shipCountry}</p>
             {order.trackingNumber && (
               <p className="mt-2 border-t border-gray-100 pt-2 text-xs">
-                <strong>Tracking:</strong> {order.trackingCarrier} · <span className="font-mono">{order.trackingNumber}</span>
+                <strong>Tracking:</strong> {order.trackingCarrier} ·{" "}
+                {(() => {
+                  const url = trackingUrl(order.trackingCarrier, order.trackingNumber);
+                  return url ? (
+                    <a href={url} target="_blank" rel="noopener" className="font-mono text-blue-700 hover:underline">
+                      {order.trackingNumber}
+                    </a>
+                  ) : (
+                    <span className="font-mono">{order.trackingNumber}</span>
+                  );
+                })()}
+                {order.shippingCostCents != null && (
+                  <> · <span className="text-gray-600">Cost {money(order.shippingCostCents)}</span></>
+                )}
               </p>
+            )}
+            {order.status !== "shipped" && order.status !== "delivered" && order.status !== "cancelled" && (
+              <div className="mt-3 flex gap-3 border-t border-gray-100 pt-3 text-xs">
+                <Link href={`/admin/orders/${order.id}/picklist`} target="_blank" className="text-blue-700 hover:underline">
+                  Print picklist / slip →
+                </Link>
+              </div>
             )}
           </section>
 

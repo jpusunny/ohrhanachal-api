@@ -2,8 +2,10 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { withCors, corsPreflight } from "@/lib/cors";
 import { json, parseBody, serverError } from "@/lib/api";
-import { getOrderSettings } from "@/lib/settings";
-import { notifyOrderPlaced } from "@/lib/order-notifications";
+import { getActiveXKey, getOrderSettings } from "@/lib/settings";
+import { charge } from "@/lib/cardknox";
+import { isWholesaleContext, pickPriceCents } from "@/lib/wholesale";
+import { notifyOrderPaid, notifyOrderPlaced } from "@/lib/order-notifications";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -31,7 +33,8 @@ const bodySchema = z.object({
     zip: z.string().min(1),
     country: z.string().default("United States"),
   }),
-  paymentPref: z.enum(["contact_me", "invoice", "phone", "in_person"]),
+  paymentPref: z.enum(["contact_me", "invoice", "phone", "in_person", "card"]),
+  cardknoxToken: z.string().min(1).max(500).optional(),
   note: z.string().max(2000).optional(),
   lines: z.array(lineInput).min(1),
 });
@@ -41,6 +44,8 @@ export async function POST(req: Request) {
     const parsed = await parseBody(req, bodySchema);
     if (!parsed.ok) return withCors(req, parsed.res);
     const input = parsed.data;
+
+    const { ok: wholesale, accountId: wholesaleAccountId } = await isWholesaleContext();
 
     // Load variants with inventory in one shot, verify still available.
     const variants = await prisma.variant.findMany({
@@ -74,12 +79,13 @@ export async function POST(req: Request) {
       if (available < l.quantity) {
         unavailable.push({ variantId: l.variantId, reason: `only ${available} in stock` }); continue;
       }
-      const lineTotal = v.priceCents * l.quantity;
+      const unit = pickPriceCents(v, wholesale);
+      const lineTotal = unit * l.quantity;
       subtotal += lineTotal;
       prepared.push({
         variantId: v.id,
         qty: l.quantity,
-        unit: v.priceCents,
+        unit,
         lineTotal,
         snapshotTitle: v.product.title,
         snapshotSku: v.sku,
@@ -97,6 +103,40 @@ export async function POST(req: Request) {
       subtotal >= settings.freeShippingOverCents ? 0 : settings.flatShippingCents;
     const total = subtotal + shippingCents;
 
+    // Wholesale customers pay on invoice (net-30) — no card capture. Force it.
+    const effectivePref: typeof input.paymentPref = wholesale ? "invoice" : input.paymentPref;
+
+    // If the customer picked "card", we need a Cardknox token AND card payments
+    // must be enabled + configured. Charge FIRST, then create the order. This
+    // means a declined card never allocates an orderNo or reserves stock.
+    let cardResult: Awaited<ReturnType<typeof charge>> | null = null;
+    if (effectivePref === "card") {
+      if (!input.cardknoxToken) {
+        return withCors(req, json({ error: "missing_card_token" }, 400));
+      }
+      const { key: xKey } = await getActiveXKey();
+      if (!xKey) {
+        return withCors(req, json({ error: "card_payments_disabled" }, 400));
+      }
+      cardResult = await charge({
+        xKey,
+        amountCents: total,
+        token: input.cardknoxToken,
+        orderNo: `PENDING`,
+        customer: input.customer,
+        ship: {
+          street: input.shipping.street,
+          city: input.shipping.city,
+          state: input.shipping.state,
+          zip: input.shipping.zip,
+          country: input.shipping.country,
+        },
+      });
+      if (!cardResult.ok) {
+        return withCors(req, json({ error: "card_declined", details: cardResult.error }, 402));
+      }
+    }
+
     // Transactionally: allocate orderNo, insert Order + lines, bump reserved on each variant.
     const created = await prisma.$transaction(async (tx) => {
       const seq = await tx.$queryRawUnsafe<{ nextval: bigint }[]>(
@@ -106,8 +146,11 @@ export async function POST(req: Request) {
       const order = await tx.order.create({
         data: {
           orderNo,
-          status: "pending",
-          paymentPref: input.paymentPref,
+          status: cardResult ? "paid" : "pending",
+          paidAt: cardResult ? new Date() : null,
+          channel: wholesale ? "wholesale" : "web",
+          wholesaleAccountId: wholesale ? wholesaleAccountId : null,
+          paymentPref: effectivePref,
           customerEmail: input.customer.email.toLowerCase(),
           customerName: input.customer.name,
           customerPhone: input.customer.phone || null,
@@ -121,6 +164,12 @@ export async function POST(req: Request) {
           subtotalCents: subtotal,
           shippingCents,
           totalCents: total,
+          paymentRecordedAs: cardResult ? `Cardknox ${cardResult.brand || "card"} ****${cardResult.last4 || "----"} (ref ${cardResult.refNum})` : null,
+          cardknoxRefNum: cardResult?.refNum ?? null,
+          cardknoxLast4:  cardResult?.last4 ?? null,
+          cardknoxBrand:  cardResult?.brand ?? null,
+          cardknoxAvsCode: cardResult?.avs ?? null,
+          cardknoxCvvCode: cardResult?.cvv ?? null,
         },
       });
       await tx.orderLine.createMany({
@@ -148,10 +197,20 @@ export async function POST(req: Request) {
         data: {
           orderId: order.id,
           kind: "placed",
-          actor: `customer:${order.customerEmail}`,
-          body: `Placed via ${input.paymentPref}`,
+          actor: wholesale ? `wholesale:${order.customerEmail}` : `customer:${order.customerEmail}`,
+          body: `Placed via ${effectivePref}${wholesale ? " (wholesale)" : ""}`,
         },
       });
+      if (cardResult) {
+        await tx.orderEvent.create({
+          data: {
+            orderId: order.id,
+            kind: "paid",
+            actor: `customer:${order.customerEmail}`,
+            body: `Cardknox ${cardResult.brand || "card"} ****${cardResult.last4 || "----"} — ref ${cardResult.refNum}`,
+          },
+        });
+      }
       return tx.order.findUniqueOrThrow({
         where: { id: order.id },
         include: { lines: true },
@@ -160,6 +219,9 @@ export async function POST(req: Request) {
 
     // Fire notifications after the transaction commits. Do not block on failure.
     notifyOrderPlaced(created).catch((e) => console.error("[notify:placed]", e));
+    if (cardResult) {
+      notifyOrderPaid(created).catch((e) => console.error("[notify:paid]", e));
+    }
 
     return withCors(
       req,

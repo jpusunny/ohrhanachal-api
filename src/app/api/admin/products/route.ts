@@ -65,6 +65,7 @@ export async function POST(req: Request) {
             sku: v.sku,
             barcode: v.barcode ?? null,
             priceCents: v.priceCents,
+            wholesalePriceCents: v.wholesalePriceCents ?? null,
             compareAtCents: v.compareAtCents ?? null,
             weightGrams: v.weightGrams ?? null,
             active: v.active ?? true,

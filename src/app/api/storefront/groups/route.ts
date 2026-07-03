@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { withCors, corsPreflight } from "@/lib/cors";
 import { json, serverError } from "@/lib/api";
+import { isWholesaleContext, pickPriceCents } from "@/lib/wholesale";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -41,13 +42,14 @@ export async function GET(req: Request) {
       where.authorGroup = series;
     }
 
+    const { ok: wholesale } = await isWholesaleContext();
     const products = await prisma.product.findMany({
       where,
       orderBy: { title: "asc" },
       include: {
         variants: {
           where: { active: true },
-          select: { priceCents: true },
+          select: { priceCents: true, wholesalePriceCents: true },
         },
         images: { orderBy: { position: "asc" }, take: 1, select: { url: true, altText: true } },
       },
@@ -93,8 +95,9 @@ export async function GET(req: Request) {
       // Prefer image from the primary member (or first non-null).
       if (!g.image && p.images[0]) g.image = p.images[0];
       for (const v of p.variants) {
-        if (g.priceCentsMin == null || v.priceCents < g.priceCentsMin) g.priceCentsMin = v.priceCents;
-        if (g.priceCentsMax == null || v.priceCents > g.priceCentsMax) g.priceCentsMax = v.priceCents;
+        const price = pickPriceCents(v, wholesale);
+        if (g.priceCentsMin == null || price < g.priceCentsMin) g.priceCentsMin = price;
+        if (g.priceCentsMax == null || price > g.priceCentsMax) g.priceCentsMax = price;
       }
     }
 
@@ -117,7 +120,7 @@ export async function GET(req: Request) {
       };
     }).sort((a, b) => a.title.localeCompare(b.title));
 
-    return withCors(req, json({ groups: list }));
+    return withCors(req, json({ groups: list, wholesale }));
   } catch (e) {
     return withCors(req, serverError(e));
   }

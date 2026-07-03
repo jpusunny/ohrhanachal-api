@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 
 const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("mark_paid"), recordedAs: z.string().max(200).optional(), note: z.string().max(1000).optional() }),
-  z.object({ action: z.literal("mark_shipped"), carrier: z.string().max(60), trackingNumber: z.string().max(120), note: z.string().max(1000).optional() }),
+  z.object({ action: z.literal("mark_shipped"), carrier: z.string().max(60), trackingNumber: z.string().max(120), shippingCostCents: z.number().int().min(0).max(1000000).optional(), note: z.string().max(1000).optional() }),
   z.object({ action: z.literal("mark_delivered"), note: z.string().max(1000).optional() }),
   z.object({ action: z.literal("cancel"), note: z.string().max(1000).optional() }),
 ]);
@@ -91,6 +91,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             shippedAt: now,
             trackingCarrier: input.carrier,
             trackingNumber: input.trackingNumber,
+            shippingCostCents: input.shippingCostCents ?? null,
           },
         });
         await tx.orderEvent.create({

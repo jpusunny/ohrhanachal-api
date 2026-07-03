@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { withCors, corsPreflight } from "@/lib/cors";
 import { json, notFound, serverError } from "@/lib/api";
+import { isWholesaleContext, pickPriceCents } from "@/lib/wholesale";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,6 +26,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ handle: 
     });
     if (!p || p.status !== "active") return withCors(req, notFound());
 
+    const { ok: wholesale } = await isWholesaleContext();
     const variants = p.variants.map((v) => {
       const onHand = v.inventory?.onHand ?? 0;
       const reserved = v.inventory?.reserved ?? 0;
@@ -33,7 +35,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ handle: 
         id: v.id,
         name: v.name,
         sku: v.sku,
-        priceCents: v.priceCents,
+        priceCents: pickPriceCents(v, wholesale),
         compareAtCents: v.compareAtCents,
         weightGrams: v.weightGrams,
         inStock: available > 0,
@@ -56,7 +58,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ handle: 
               where: { active: true },
               orderBy: { priceCents: "asc" },
               take: 1,
-              select: { priceCents: true },
+              select: { priceCents: true, wholesalePriceCents: true },
             },
           },
         })
@@ -77,11 +79,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ handle: 
           descriptionHtml: p.descriptionHtml,
           variants,
           images: p.images.map((i) => ({ url: i.url, altText: i.altText, position: i.position })),
+          wholesale,
           siblings: siblings.map((s) => ({
             handle: s.handle,
             title: s.title,
             image: s.images[0]?.url ?? null,
-            priceCents: s.variants[0]?.priceCents ?? null,
+            priceCents: s.variants[0] ? pickPriceCents(s.variants[0], wholesale) : null,
           })),
         },
       }),

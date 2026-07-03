@@ -1,5 +1,6 @@
 import { sendEmail } from "@/lib/email";
 import { getEmailSettings } from "@/lib/settings";
+import { trackingUrl } from "@/lib/carriers";
 import type { Order, OrderLine } from "@prisma/client";
 
 type OrderWithLines = Order & { lines: OrderLine[] };
@@ -112,8 +113,9 @@ export async function notifyOrderPaid(order: OrderWithLines): Promise<void> {
 }
 
 export async function notifyOrderShipped(order: OrderWithLines): Promise<void> {
+  const url = trackingUrl(order.trackingCarrier, order.trackingNumber);
   const tracking = order.trackingNumber
-    ? `<p style="font-family:sans-serif;font-size:15px">Tracking: <strong>${esc(order.trackingCarrier)}</strong> · <code>${esc(order.trackingNumber)}</code></p>`
+    ? `<p style="font-family:sans-serif;font-size:15px">Tracking: <strong>${esc(order.trackingCarrier)}</strong> · <code>${esc(order.trackingNumber)}</code>${url ? ` · <a href="${url}" style="color:#8a6b1f">Track your package →</a>` : ""}</p>`
     : "";
   const html = baseTemplate(
     `Order ${order.orderNo} is on its way.`,

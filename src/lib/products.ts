@@ -6,6 +6,7 @@ export const variantInput = z.object({
   sku: z.string().min(1),
   barcode: z.string().nullish(),
   priceCents: z.number().int().nonnegative(),
+  wholesalePriceCents: z.number().int().nonnegative().nullish(),
   compareAtCents: z.number().int().nonnegative().nullish(),
   weightGrams: z.number().int().nonnegative().nullish(),
   active: z.boolean().optional().default(true),

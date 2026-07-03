@@ -14,8 +14,13 @@ export function withCors(req: Request, res: NextResponse): NextResponse {
   const origin = pickOrigin(req);
   res.headers.set("Access-Control-Allow-Origin", origin);
   res.headers.set("Vary", "Origin");
-  res.headers.set("Access-Control-Allow-Methods", "GET,OPTIONS");
+  res.headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   res.headers.set("Access-Control-Allow-Headers", "content-type");
+  // Never wildcard-origin with credentials — pickOrigin echoes a specific host,
+  // so wholesale login/logout cookies survive cross-origin XHR from storefront.
+  if (origin !== "*") {
+    res.headers.set("Access-Control-Allow-Credentials", "true");
+  }
   res.headers.set("Access-Control-Max-Age", "86400");
   return res;
 }

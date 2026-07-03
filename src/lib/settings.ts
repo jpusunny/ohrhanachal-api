@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { encryptSecret, decryptSecret } from "@/lib/crypto";
 
 export type EmailSettings = {
   enabled: boolean;
@@ -58,4 +59,51 @@ export function getEmailSettings(): Promise<EmailSettings> {
 
 export function getOrderSettings(): Promise<OrderSettings> {
   return readSetting<OrderSettings>("orders", DEFAULT_ORDER_SETTINGS);
+}
+
+// Payments (Sola via Cardknox). xKey_* are stored encrypted; iFieldsKey_* are
+// public (embedded in browser) so plaintext is fine.
+export type PaymentSettings = {
+  enabled: boolean;
+  mode: "sandbox" | "live";
+  xKeySandbox: string;      // encrypted at rest
+  xKeyLive: string;         // encrypted at rest
+  iFieldsKeySandbox: string;
+  iFieldsKeyLive: string;
+};
+
+export const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
+  enabled: false,
+  mode: "sandbox",
+  xKeySandbox: "",
+  xKeyLive: "",
+  iFieldsKeySandbox: "",
+  iFieldsKeyLive: "",
+};
+
+export async function getPaymentSettings(): Promise<PaymentSettings> {
+  const raw = await readSetting<PaymentSettings>("payments", DEFAULT_PAYMENT_SETTINGS);
+  return {
+    ...raw,
+    xKeySandbox: raw.xKeySandbox ? decryptSecret(raw.xKeySandbox) : "",
+    xKeyLive:    raw.xKeyLive    ? decryptSecret(raw.xKeyLive)    : "",
+  };
+}
+
+export async function writePaymentSettings(next: PaymentSettings): Promise<void> {
+  const encrypted: PaymentSettings = {
+    ...next,
+    xKeySandbox: next.xKeySandbox ? encryptSecret(next.xKeySandbox) : "",
+    xKeyLive:    next.xKeyLive    ? encryptSecret(next.xKeyLive)    : "",
+  };
+  await writeSetting("payments", encrypted);
+}
+
+// Convenience — returns the active xKey for the current mode (empty string if
+// not configured). Callers use this to decide whether card payment is available.
+export async function getActiveXKey(): Promise<{ key: string; mode: "sandbox" | "live" }> {
+  const p = await getPaymentSettings();
+  if (!p.enabled) return { key: "", mode: p.mode };
+  const key = p.mode === "live" ? p.xKeyLive : p.xKeySandbox;
+  return { key, mode: p.mode };
 }

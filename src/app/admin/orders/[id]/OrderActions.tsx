@@ -15,6 +15,7 @@ export default function OrderActions({ orderId, orderNo, status }: Props) {
   const [recordedAs, setRecordedAs] = useState("");
   const [carrier, setCarrier] = useState("USPS");
   const [tracking, setTracking] = useState("");
+  const [shipCost, setShipCost] = useState("");
   const [note, setNote] = useState("");
   const [noteInternal, setNoteInternal] = useState(true);
 
@@ -30,7 +31,7 @@ export default function OrderActions({ orderId, orderNo, status }: Props) {
       const body2 = await res.json().catch(() => ({}));
       if (!res.ok) { setErr(body2.details || body2.error || `${kind} failed`); return; }
       setModal(null);
-      setRecordedAs(""); setTracking(""); setNote("");
+      setRecordedAs(""); setTracking(""); setShipCost(""); setNote("");
       router.refresh();
     } catch { setErr("Network error."); } finally { setBusy(false); }
   }
@@ -109,8 +110,11 @@ export default function OrderActions({ orderId, orderNo, status }: Props) {
           <div className="grid gap-3 md:grid-cols-2">
             <label className="text-sm">
               <span className="mb-1 block text-gray-700">Carrier</span>
-              <input type="text" value={carrier} onChange={(e) => setCarrier(e.target.value)}
+              <input type="text" list="ship-carriers" value={carrier} onChange={(e) => setCarrier(e.target.value)}
                 className="w-full rounded border border-gray-300 px-3 py-2" />
+              <datalist id="ship-carriers">
+                <option value="USPS" /><option value="UPS" /><option value="FedEx" /><option value="DHL" /><option value="OnTrac" />
+              </datalist>
             </label>
             <label className="text-sm">
               <span className="mb-1 block text-gray-700">Tracking number</span>
@@ -118,13 +122,30 @@ export default function OrderActions({ orderId, orderNo, status }: Props) {
                 className="w-full rounded border border-gray-300 px-3 py-2 font-mono" autoFocus />
             </label>
           </div>
+          <label className="mt-3 block text-sm">
+            <span className="mb-1 block text-gray-700">Shipping cost (optional — what you paid the carrier)</span>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500">$</span>
+              <input type="text" inputMode="decimal" value={shipCost} onChange={(e) => setShipCost(e.target.value)}
+                placeholder="0.00" className="w-32 rounded border border-gray-300 px-3 py-2" />
+            </div>
+          </label>
           <p className="mt-2 text-xs text-gray-500">
             This deducts stock from on-hand and clears the reservation for every line.
           </p>
           <div className="mt-4 flex justify-end gap-2">
             <button onClick={() => setModal(null)} className="rounded border border-gray-300 px-3 py-2 text-sm">Cancel</button>
             <button disabled={busy || !tracking.trim() || !carrier.trim()}
-              onClick={() => transition({ action: "mark_shipped", carrier: carrier.trim(), trackingNumber: tracking.trim() }, "ship")}
+              onClick={() => {
+                const dollars = parseFloat(shipCost);
+                const cents = Number.isFinite(dollars) && dollars > 0 ? Math.round(dollars * 100) : undefined;
+                return transition({
+                  action: "mark_shipped",
+                  carrier: carrier.trim(),
+                  trackingNumber: tracking.trim(),
+                  ...(cents !== undefined ? { shippingCostCents: cents } : {}),
+                }, "ship");
+              }}
               className="rounded bg-purple-600 px-3 py-2 text-sm text-white disabled:opacity-40">
               {busy ? "Saving…" : "Mark shipped & email customer"}
             </button>

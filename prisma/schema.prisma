@@ -46,6 +46,7 @@ enum PaymentPref {
   invoice
   phone
   in_person
+  card
 }
 
 enum OrderEventKind {
@@ -55,6 +56,18 @@ enum OrderEventKind {
   delivered
   cancelled
   note
+}
+
+enum OrderChannel {
+  web
+  wholesale
+  phone
+}
+
+enum WholesaleStatus {
+  pending
+  approved
+  suspended
 }
 
 model Product {
@@ -81,17 +94,18 @@ model Product {
 }
 
 model Variant {
-  id              String   @id @default(cuid())
-  productId       String
-  name            String
-  sku             String   @unique
-  barcode         String?
-  priceCents      Int
-  compareAtCents  Int?
-  weightGrams     Int?
-  active          Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  productId           String
+  name                String
+  sku                 String   @unique
+  barcode             String?
+  priceCents          Int
+  wholesalePriceCents Int?
+  compareAtCents      Int?
+  weightGrams         Int?
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   product    Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
   inventory  InventoryLevel?
@@ -167,7 +181,15 @@ model Order {
   totalCents        Int
   trackingCarrier   String?
   trackingNumber    String?
+  shippingCostCents Int?
   paymentRecordedAs String?
+  cardknoxRefNum    String?
+  cardknoxLast4     String?
+  cardknoxBrand     String?
+  cardknoxAvsCode   String?
+  cardknoxCvvCode   String?
+  channel           OrderChannel @default(web)
+  wholesaleAccountId String?
   placedAt          DateTime     @default(now())
   paidAt            DateTime?
   shippedAt         DateTime?
@@ -179,9 +201,38 @@ model Order {
   lines  OrderLine[]
   events OrderEvent[]
 
+  wholesaleAccount WholesaleAccount? @relation(fields: [wholesaleAccountId], references: [id], onDelete: SetNull)
+
   @@index([status])
   @@index([customerEmail])
   @@index([placedAt])
+  @@index([wholesaleAccountId])
+}
+
+model WholesaleAccount {
+  id            String          @id @default(cuid())
+  email         String          @unique
+  passwordHash  String
+  businessName  String
+  contactName   String
+  phone         String?
+  taxId         String?
+  shipStreet    String?
+  shipStreet2   String?
+  shipCity      String?
+  shipState     String?
+  shipZip       String?
+  shipCountry   String?         @default("United States")
+  status        WholesaleStatus @default(pending)
+  approvedAt    DateTime?
+  approvedBy    String?
+  internalNotes String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  orders Order[]
+
+  @@index([status])
 }
 
 model OrderLine {

@@ -2,8 +2,8 @@ import { z } from "zod";
 import { getSession } from "@/lib/session";
 import { json, parseBody, serverError } from "@/lib/api";
 import {
-  DEFAULT_EMAIL_SETTINGS, DEFAULT_ORDER_SETTINGS,
-  getEmailSettings, getOrderSettings, writeSetting,
+  DEFAULT_EMAIL_SETTINGS, DEFAULT_ORDER_SETTINGS, DEFAULT_PAYMENT_SETTINGS,
+  getEmailSettings, getOrderSettings, getPaymentSettings, writeSetting, writePaymentSettings,
 } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
@@ -12,10 +12,17 @@ export const runtime = "nodejs";
 export async function GET() {
   const session = await getSession();
   if (!session) return json({ error: "unauthorized" }, 401);
-  const [email, orders] = await Promise.all([getEmailSettings(), getOrderSettings()]);
-  // Never leak the SMTP password back to the client — mask it.
+  const [email, orders, payments] = await Promise.all([
+    getEmailSettings(), getOrderSettings(), getPaymentSettings(),
+  ]);
+  // Never leak SMTP password or xKeys back to the client — mask them.
   const maskedEmail = { ...email, smtpPass: email.smtpPass ? "•••••••" : "" };
-  return json({ email: maskedEmail, orders });
+  const maskedPayments = {
+    ...payments,
+    xKeySandbox: payments.xKeySandbox ? "•••••••" : "",
+    xKeyLive:    payments.xKeyLive    ? "•••••••" : "",
+  };
+  return json({ email: maskedEmail, orders, payments: maskedPayments });
 }
 
 const emailBody = z.object({
@@ -35,9 +42,19 @@ const orderBody = z.object({
   flatShippingCents: z.number().int().nonnegative(),
 });
 
+const paymentBody = z.object({
+  enabled: z.boolean(),
+  mode: z.enum(["sandbox", "live"]),
+  xKeySandbox: z.string(),       // "" or "•••••••" means "don't change"
+  xKeyLive: z.string(),
+  iFieldsKeySandbox: z.string(),
+  iFieldsKeyLive: z.string(),
+});
+
 const bodySchema = z.object({
   email: emailBody.partial().optional(),
   orders: orderBody.partial().optional(),
+  payments: paymentBody.partial().optional(),
 });
 
 export async function PUT(req: Request) {
@@ -59,6 +76,15 @@ export async function PUT(req: Request) {
       const cur = await getOrderSettings();
       const next = { ...DEFAULT_ORDER_SETTINGS, ...cur, ...parsed.data.orders };
       await writeSetting("orders", next);
+    }
+    if (parsed.data.payments) {
+      const cur = await getPaymentSettings();
+      const inp = parsed.data.payments;
+      const next = { ...DEFAULT_PAYMENT_SETTINGS, ...cur, ...inp } as typeof cur;
+      // Preserve stored xKeys if the caller sent an empty string or the mask.
+      if (!inp.xKeySandbox || inp.xKeySandbox === "•••••••") next.xKeySandbox = cur.xKeySandbox;
+      if (!inp.xKeyLive    || inp.xKeyLive    === "•••••••") next.xKeyLive    = cur.xKeyLive;
+      await writePaymentSettings(next);
     }
     return json({ ok: true });
   } catch (e) {

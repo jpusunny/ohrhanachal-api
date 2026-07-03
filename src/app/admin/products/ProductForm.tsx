@@ -21,6 +21,7 @@ type VariantState = {
   sku: string;
   barcode: string;
   priceCents: string;
+  wholesalePriceCents: string;
   compareAtCents: string;
   weightGrams: string;
   active: boolean;
@@ -74,6 +75,7 @@ function newVariant(): VariantState {
     sku: "",
     barcode: "",
     priceCents: "0",
+    wholesalePriceCents: "",
     compareAtCents: "",
     weightGrams: "",
     active: true,
@@ -162,6 +164,7 @@ export default function ProductForm({ initial }: { initial: ProductFormInitial }
         sku: v.sku.trim(),
         barcode: v.barcode.trim() || null,
         priceCents: toIntOrNull(v.priceCents) ?? 0,
+        wholesalePriceCents: toIntOrNull(v.wholesalePriceCents),
         compareAtCents: toIntOrNull(v.compareAtCents),
         weightGrams: toIntOrNull(v.weightGrams),
         active: v.active,
@@ -382,6 +385,17 @@ export default function ProductForm({ initial }: { initial: ProductFormInitial }
                     min={0}
                     value={v.compareAtCents}
                     onChange={(e) => updateVariant(idx, { compareAtCents: e.target.value })}
+                    className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-gray-600">Wholesale (¢)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={v.wholesalePriceCents}
+                    onChange={(e) => updateVariant(idx, { wholesalePriceCents: e.target.value })}
+                    placeholder="—"
                     className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
                   />
                 </div>

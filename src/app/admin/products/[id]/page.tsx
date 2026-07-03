@@ -33,6 +33,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
       sku: v.sku,
       barcode: v.barcode ?? "",
       priceCents: String(v.priceCents),
+      wholesalePriceCents: v.wholesalePriceCents == null ? "" : String(v.wholesalePriceCents),
       compareAtCents: v.compareAtCents == null ? "" : String(v.compareAtCents),
       weightGrams: v.weightGrams == null ? "" : String(v.weightGrams),
       active: v.active,

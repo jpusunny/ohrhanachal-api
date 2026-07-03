@@ -19,14 +19,25 @@ type OrderSettings = {
   flatShippingCents: number;
 };
 
-type Initial = { email: EmailSettings; orders: OrderSettings };
+type PaymentSettings = {
+  enabled: boolean;
+  mode: "sandbox" | "live";
+  xKeySandbox: string;
+  xKeyLive: string;
+  iFieldsKeySandbox: string;
+  iFieldsKeyLive: string;
+};
+
+type Initial = { email: EmailSettings; orders: OrderSettings; payments: PaymentSettings };
 
 export default function SettingsClient({ initial, me }: { initial: Initial; me: string }) {
   const [email, setEmail] = useState<EmailSettings>(initial.email);
   const [orders, setOrders] = useState<OrderSettings>(initial.orders);
+  const [payments, setPayments] = useState<PaymentSettings>(initial.payments);
   const [testTo, setTestTo] = useState(me);
   const [busy, setBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
+  const [payTestBusy, setPayTestBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -36,17 +47,37 @@ export default function SettingsClient({ initial, me }: { initial: Initial; me: 
       const res = await fetch("/api/admin/settings", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, orders }),
+        body: JSON.stringify({ email, orders, payments }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) { setErr(body.error || "Save failed."); return; }
       setMsg("Saved.");
-      // Re-mask the password after successful save so the field doesn't send
-      // a real password back on the next PUT.
+      // Re-mask secrets after successful save so real values don't ride along
+      // on the next PUT.
       if (email.smtpPass && email.smtpPass !== "•••••••") {
         setEmail((e) => ({ ...e, smtpPass: "•••••••" }));
       }
+      setPayments((p) => ({
+        ...p,
+        xKeySandbox: p.xKeySandbox ? "•••••••" : "",
+        xKeyLive:    p.xKeyLive    ? "•••••••" : "",
+      }));
     } catch { setErr("Network error."); } finally { setBusy(false); }
+  }
+
+  async function testPayment() {
+    setPayTestBusy(true); setErr(null); setMsg(null);
+    try {
+      const res = await fetch("/api/admin/settings/test-payment", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mode: payments.mode }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(body.error || "Test failed."); return; }
+      if (body.ok) setMsg(`Cardknox (${payments.mode}) OK — ${body.message}`);
+      else setErr(`Cardknox (${payments.mode}) FAILED — ${body.message}`);
+    } catch { setErr("Network error."); } finally { setPayTestBusy(false); }
   }
 
   async function testEmail() {
@@ -154,6 +185,74 @@ export default function SettingsClient({ initial, me }: { initial: Initial; me: 
               className="w-full rounded border border-gray-300 px-3 py-2" />
             <span className="text-xs text-gray-500">Currently ${(orders.freeShippingOverCents/100).toFixed(2)}</span>
           </F>
+        </div>
+      </section>
+
+      <section className="rounded border border-gray-200 bg-white p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Payments — Sola via Cardknox</h2>
+          <span className={"rounded px-2 py-0.5 text-xs " + (payments.enabled ? "bg-green-100 text-green-800" : "bg-gray-200 text-gray-700")}>
+            {payments.enabled ? "Enabled" : "Disabled"}
+          </span>
+        </div>
+        <p className="mb-4 text-sm text-gray-600">
+          When enabled, checkout shows a &ldquo;Pay by card&rdquo; option that tokenizes the card with Cardknox
+          iFields and charges the resulting token. Raw card data never touches this server. Toggle mode to test
+          against Cardknox&rsquo;s sandbox before going live.
+        </p>
+
+        <label className="mb-3 flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={payments.enabled}
+            onChange={(e) => setPayments({ ...payments, enabled: e.target.checked })} />
+          Accept card payment on the storefront
+        </label>
+
+        <div className="mb-3 flex items-center gap-3 text-sm">
+          <span className="text-gray-700">Active mode:</span>
+          {(["sandbox", "live"] as const).map((m) => (
+            <label key={m} className="flex items-center gap-1">
+              <input type="radio" name="paymode" checked={payments.mode === m}
+                onChange={() => setPayments({ ...payments, mode: m })} />
+              {m}
+            </label>
+          ))}
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <F label="Sandbox xKey (encrypted at rest)">
+            <input type="password" value={payments.xKeySandbox}
+              onChange={(e) => setPayments({ ...payments, xKeySandbox: e.target.value })}
+              placeholder={payments.xKeySandbox === "•••••••" ? "unchanged" : "paste sandbox xKey"}
+              className="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs" />
+          </F>
+          <F label="Sandbox iFields key (public — used in browser)">
+            <input type="text" value={payments.iFieldsKeySandbox}
+              onChange={(e) => setPayments({ ...payments, iFieldsKeySandbox: e.target.value })}
+              className="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs" />
+          </F>
+          <F label="Live xKey (encrypted at rest)">
+            <input type="password" value={payments.xKeyLive}
+              onChange={(e) => setPayments({ ...payments, xKeyLive: e.target.value })}
+              placeholder={payments.xKeyLive === "•••••••" ? "unchanged" : "paste live xKey"}
+              className="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs" />
+          </F>
+          <F label="Live iFields key (public — used in browser)">
+            <input type="text" value={payments.iFieldsKeyLive}
+              onChange={(e) => setPayments({ ...payments, iFieldsKeyLive: e.target.value })}
+              className="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs" />
+          </F>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button type="button" onClick={testPayment}
+            disabled={payTestBusy}
+            className="rounded border border-gray-400 px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-40">
+            {payTestBusy ? "Testing…" : `Test ${payments.mode} connection`}
+          </button>
+          <p className="text-xs text-gray-500">
+            Sends a bogus token to Cardknox. If it comes back with a token error (not a key error),
+            the xKey works.
+          </p>
         </div>
       </section>
 
