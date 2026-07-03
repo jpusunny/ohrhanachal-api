@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { withCors, corsPreflight } from "@/lib/cors";
@@ -5,6 +6,7 @@ import { json, parseBody, serverError } from "@/lib/api";
 import { getActiveXKey, getOrderSettings } from "@/lib/settings";
 import { charge } from "@/lib/cardknox";
 import { isWholesaleContext, pickPriceCents } from "@/lib/wholesale";
+import { getCustomerSession, signCustomer, setCustomerCookie } from "@/lib/customer-session";
 import { notifyOrderPaid, notifyOrderPlaced } from "@/lib/order-notifications";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +37,9 @@ const bodySchema = z.object({
   }),
   paymentPref: z.enum(["contact_me", "invoice", "phone", "in_person", "card"]),
   cardknoxToken: z.string().min(1).max(500).optional(),
+  // Optional: create a retail customer account with this order. Guest checkout
+  // stays the default; this is opt-in via a checkbox on the storefront.
+  createAccountPassword: z.string().min(8).max(200).optional(),
   note: z.string().max(2000).optional(),
   lines: z.array(lineInput).min(1),
 });
@@ -46,6 +51,7 @@ export async function POST(req: Request) {
     const input = parsed.data;
 
     const { ok: wholesale, accountId: wholesaleAccountId } = await isWholesaleContext();
+    const customerSess = await getCustomerSession();
 
     // Load variants with inventory in one shot, verify still available.
     const variants = await prisma.variant.findMany({
@@ -150,6 +156,7 @@ export async function POST(req: Request) {
           paidAt: cardResult ? new Date() : null,
           channel: wholesale ? "wholesale" : "web",
           wholesaleAccountId: wholesale ? wholesaleAccountId : null,
+          customerId: customerSess?.sub ?? null,
           paymentPref: effectivePref,
           customerEmail: input.customer.email.toLowerCase(),
           customerName: input.customer.name,
@@ -216,6 +223,42 @@ export async function POST(req: Request) {
         include: { lines: true },
       });
     });
+
+    // If the guest asked us to save their details, provision a customer
+    // account with the shipping address they just typed and retro-link this
+    // order (plus any prior guest orders using the same email). Silent no-op
+    // if the email is already claimed — we don't leak account existence.
+    if (!customerSess && !wholesale && input.createAccountPassword) {
+      const email = input.customer.email.toLowerCase();
+      const existing = await prisma.customer.findUnique({ where: { email } });
+      if (!existing) {
+        try {
+          const passwordHash = await bcrypt.hash(input.createAccountPassword, 10);
+          const newCustomer = await prisma.customer.create({
+            data: {
+              email,
+              passwordHash,
+              name: input.customer.name,
+              phone: input.customer.phone || null,
+              shipStreet:  input.shipping.street,
+              shipStreet2: input.shipping.street2 || null,
+              shipCity:    input.shipping.city,
+              shipState:   input.shipping.state,
+              shipZip:     input.shipping.zip,
+              shipCountry: input.shipping.country || "United States",
+            },
+          });
+          await prisma.order.updateMany({
+            where: { customerEmail: email, customerId: null },
+            data: { customerId: newCustomer.id },
+          });
+          const token = await signCustomer({ sub: newCustomer.id, email: newCustomer.email });
+          await setCustomerCookie(token);
+        } catch (e) {
+          console.error("[checkout:create-account]", e);
+        }
+      }
+    }
 
     // Fire notifications after the transaction commits. Do not block on failure.
     notifyOrderPlaced(created).catch((e) => console.error("[notify:placed]", e));

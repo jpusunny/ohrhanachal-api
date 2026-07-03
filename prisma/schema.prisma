@@ -190,6 +190,7 @@ model Order {
   cardknoxCvvCode   String?
   channel           OrderChannel @default(web)
   wholesaleAccountId String?
+  customerId        String?
   placedAt          DateTime     @default(now())
   paidAt            DateTime?
   shippedAt         DateTime?
@@ -202,11 +203,31 @@ model Order {
   events OrderEvent[]
 
   wholesaleAccount WholesaleAccount? @relation(fields: [wholesaleAccountId], references: [id], onDelete: SetNull)
+  customer         Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([customerEmail])
   @@index([placedAt])
   @@index([wholesaleAccountId])
+  @@index([customerId])
+}
+
+model Customer {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  name          String
+  phone         String?
+  shipStreet    String?
+  shipStreet2   String?
+  shipCity      String?
+  shipState     String?
+  shipZip       String?
+  shipCountry   String?  @default("United States")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  orders Order[]
 }
 
 model WholesaleAccount {
