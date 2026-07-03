@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import AdjustStockControl from "./AdjustStockControl";
+import ImageUploader from "./ImageUploader";
 
 type VariantState = {
   id?: string;
@@ -371,49 +372,89 @@ export default function ProductForm({ initial }: { initial: ProductFormInitial }
       <section className="rounded border border-gray-200 bg-white p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Images</h2>
-          <button
-            type="button"
-            onClick={() => setField("images", [...state.images, newImage(state.images.length)])}
-            className="rounded border border-gray-300 px-3 py-1 text-xs hover:bg-gray-50"
-          >
-            + Add image
-          </button>
+          <div className="flex items-center gap-3">
+            <ImageUploader
+              onUploaded={(url) => {
+                setState((s) => ({
+                  ...s,
+                  images: [
+                    ...s.images,
+                    { url, altText: "", position: String(s.images.length) },
+                  ],
+                }));
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setField("images", [...state.images, newImage(state.images.length)])}
+              className="rounded border border-gray-300 px-3 py-1 text-xs hover:bg-gray-50"
+            >
+              + Paste URL
+            </button>
+          </div>
         </div>
-        {state.images.length === 0 && <p className="text-sm text-gray-500">No images yet.</p>}
+        {state.images.length === 0 && (
+          <p className="text-sm text-gray-500">
+            No images yet. Upload one above, or paste a URL.
+          </p>
+        )}
         <div className="space-y-2">
           {state.images.map((img, idx) => (
-            <div key={img.id ?? `new-${idx}`} className="grid grid-cols-12 gap-2">
-              <input
-                value={img.url}
-                onChange={(e) => updateImage(idx, { url: e.target.value })}
-                placeholder="https://…"
-                className="col-span-7 rounded border border-gray-300 px-2 py-1 text-sm"
-              />
-              <input
-                value={img.altText}
-                onChange={(e) => updateImage(idx, { altText: e.target.value })}
-                placeholder="alt text"
-                className="col-span-3 rounded border border-gray-300 px-2 py-1 text-sm"
-              />
-              <input
-                type="number"
-                value={img.position}
-                onChange={(e) => updateImage(idx, { position: e.target.value })}
-                placeholder="pos"
-                className="col-span-1 rounded border border-gray-300 px-2 py-1 text-sm"
-              />
-              <button
-                type="button"
-                onClick={() =>
-                  setField(
-                    "images",
-                    state.images.filter((_, i) => i !== idx),
-                  )
-                }
-                className="col-span-1 rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
-              >
-                Remove
-              </button>
+            <div
+              key={img.id ?? `new-${idx}`}
+              className="flex items-start gap-2 rounded border border-gray-200 p-2"
+            >
+              {img.url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={img.url}
+                  alt={img.altText || ""}
+                  className="h-16 w-16 flex-shrink-0 rounded border border-gray-200 object-cover"
+                />
+              ) : (
+                <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded border border-dashed border-gray-300 text-[10px] text-gray-400">
+                  no image
+                </div>
+              )}
+              <div className="grid flex-1 grid-cols-12 gap-2">
+                <input
+                  value={img.url}
+                  onChange={(e) => updateImage(idx, { url: e.target.value })}
+                  placeholder="https://…"
+                  className="col-span-7 rounded border border-gray-300 px-2 py-1 text-sm"
+                />
+                <input
+                  value={img.altText}
+                  onChange={(e) => updateImage(idx, { altText: e.target.value })}
+                  placeholder="alt text"
+                  className="col-span-3 rounded border border-gray-300 px-2 py-1 text-sm"
+                />
+                <input
+                  type="number"
+                  value={img.position}
+                  onChange={(e) => updateImage(idx, { position: e.target.value })}
+                  placeholder="pos"
+                  className="col-span-1 rounded border border-gray-300 px-2 py-1 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setField(
+                      "images",
+                      state.images.filter((_, i) => i !== idx),
+                    )
+                  }
+                  className="col-span-1 rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
+                >
+                  Remove
+                </button>
+                <div className="col-span-12">
+                  <ImageUploader
+                    compact
+                    onUploaded={(url) => updateImage(idx, { url })}
+                  />
+                </div>
+              </div>
             </div>
           ))}
         </div>
