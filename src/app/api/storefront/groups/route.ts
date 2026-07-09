@@ -64,6 +64,10 @@ export async function GET(req: Request) {
       priceCentsMax: number | null;
       image: { url: string; altText: string | null } | null;
       formats: Set<string>;
+      // First product handle we saw for each derived format. Used to link
+      // clickable format chips on the /collection page group card straight
+      // to the specific variant's PDP.
+      formatHandle: Map<string, string>;
       members: { handle: string; title: string }[];
       count: number;
     };
@@ -82,13 +86,16 @@ export async function GET(req: Request) {
           priceCentsMax: null,
           image: null,
           formats: new Set<string>(),
+          formatHandle: new Map<string, string>(),
           members: [],
           count: 0,
         };
         groups.set(slug, g);
       }
       g.count++;
-      g.formats.add(formatOf(p.title));
+      const fmt = formatOf(p.title);
+      g.formats.add(fmt);
+      if (!g.formatHandle.has(fmt)) g.formatHandle.set(fmt, p.handle);
       g.members.push({ handle: p.handle, title: p.title });
       // Prefer titleHe from any member that has one.
       if (!g.titleHe && p.titleHe) g.titleHe = p.titleHe;
@@ -106,6 +113,7 @@ export async function GET(req: Request) {
       // Set group title to the primary product's title if available (drops "- Pocket" etc.)
       const title = primary.title.replace(/\s*[-—]\s*(pocket|leather|set|pocket leather|pocket - leather).*$/i, "").trim() || g.title;
       const formats = FORMAT_ORDER.filter((f) => g.formats.has(f));
+      const formatHandles = formats.map((f) => ({ format: f, handle: g.formatHandle.get(f)! }));
       return {
         slug: g.slug,
         title,
@@ -115,6 +123,7 @@ export async function GET(req: Request) {
         priceCentsMax: g.priceCentsMax,
         image: g.image,
         formats,
+        formatHandles,
         productHandle: primary.handle,
         count: g.count,
       };
